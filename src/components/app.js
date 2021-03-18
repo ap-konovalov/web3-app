@@ -44,12 +44,38 @@ class App extends React.Component {
         });
     }
 
+    transferData() {
+        const txData = {
+            type: 12,
+            data: {
+                data: [
+                    {key: "string", value: "testVal", type: "string"},
+                    {key: "binary", value: "base64:AbCd", type: "binary"},
+                    {key: "integer", value: 20, type: "integer"},
+                    {key: "boolean", value: false, type: "boolean"},
+                ],
+                fee: {
+                    "tokens": "0.01",
+                    "assetId": "WAVES"
+                }
+            }
+        };
+
+        WavesKeeper.signAndPublishTransaction(txData).then((data) => {
+            //data - строка готовая для отсылки на ноду(сервер) сети Waves
+        }).catch((error) => {
+            console.log(error)
+        });
+    }
+
     render() {
         return (
             <div className="container">
                 <input className="btn btn-primary" type="submit" value="Auth with WavesKeeper" onClick={this.authFunc}/>
                 &emsp;
                 <input className="btn btn-primary" type="submit" value="Transfer money" onClick={this.transferFunc}/>
+                &emsp;
+                <input className="btn btn-primary" type="submit" value="Send data" onClick={this.transferData}/>
             </div>
         )
     }
