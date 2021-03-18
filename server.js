@@ -11,6 +11,6 @@ app.use(express.static(__dirname + "/dist"))
 let port = process.env.PORT || 5000;
 app.listen(port, () => {
     console.log(__dirname);
-    console.log("Listening port: " + port);
+    console.log("Application run on http://localhost:" + port);
 })
 
