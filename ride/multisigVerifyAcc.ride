@@ -1,0 +1,24 @@
+{-# STDLIB_VERSION 3 #-}
+{-# CONTENT_TYPE DAPP #-}
+{-# SCRIPT_TYPE ACCOUNT #-}
+
+@Verifier(tx)
+func verify() = {
+    #define public keys
+    let sashaPubKey  = base58'3GDiy6rDsiKLPAxuRkeS9N8SUG3zzubxqFcccHVdAgzD'
+    let valentinPubKey = base58'FvURYtdjDdK6MapBoNR2kVVsPas54EaN8bZETtvUuhXy'
+
+    #check whoever provided the valid proof
+    let currentUserSigned  = if(sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)) then 1 else 0
+    let valentinSigned  = if(sigVerify(tx.bodyBytes, tx.proofs[1], sashaPubKey )) then 1 else 0
+    let borisSigned = if(sigVerify(tx.bodyBytes, tx.proofs[2], valentinPubKey )) then 1 else 0
+
+    let proofsCount = currentUserSigned + valentinSigned + borisSigned
+
+    match (tx) {
+        case d:DataTransaction => true
+        case s: SetScriptTransaction =>
+            proofsCount >= 2
+        case _ => false
+      }
+}
