@@ -1,0 +1,27 @@
+{-# STDLIB_VERSION 3 #-}
+{-# CONTENT_TYPE DAPP #-}
+{-# SCRIPT_TYPE ACCOUNT #-}
+
+@Callable(i)
+func purchase() = {
+  let pmt = i.payment.extract()
+  if(pmt.assetId.isDefined()) then throw("Can use Waves only at the moment")
+  else{
+      let customerAddress = i.caller.bytes.toBase58String()
+      let price = match getInteger(this, "item_A_coupon_price") {
+          case a: Int => a 
+          case _ => 0
+      }
+      if(pmt.amount < price) then throw("Purchase amount cannot be less than item price")
+      else if( pmt.amount > price) then throw("Purchase amount cannot be higher than item price")
+      else{
+        WriteSet([
+            DataEntry("status:purcashes_item_A_customer_" + customerAddress, "confirmed"),
+            DataEntry("price:purchase_item_A_customer_" + customerAddress, price)
+        ])
+      }
+  }
+}
+
+@Verifier(tx)
+func verify() = sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
