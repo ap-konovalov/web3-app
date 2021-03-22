@@ -3,13 +3,13 @@
 {-# SCRIPT_TYPE ACCOUNT #-}
 
 @Callable(i)
-func purchase() = {
+func purchase(itemPriceField: String) = {
   let pmt = i.payment.extract()
   if(pmt.assetId.isDefined()) then throw("Can use Waves only at the moment")
   else{
       let customerAddress = i.caller.bytes.toBase58String()
-      let price = match getInteger(this, "item_A_coupon_price") {
-          case a: Int => a 
+      let price = match getInteger(this, itemPriceField) {
+          case a: Int => a
           case _ => 0
       }
       if(pmt.amount < price) then throw("Purchase amount cannot be less than item price")

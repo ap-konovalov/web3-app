@@ -45,16 +45,42 @@ describe('dApp shop test', () => {
             })
     })
 
-    it('Can buy item if price is equals item price', async () => {
+    it('Can buy item A if price is equals item price', async () => {
         const tx = invokeScript({
             dApp: shopAccountAddress,
             call: {
                 "function": "purchase",
-                "args": []
+                "args": [{
+                    "type" : "string",
+                    "value" : "item_A_coupon_price"
+                }]
             },
             payment: [
                 {
                     amount:333,
+                    assetId: null
+                }
+            ],
+            fee: 900000
+        })
+
+        await broadcast(tx)
+        await waitForTx(tx.id)
+    })
+
+    it('Can buy item B if price is equals item price', async () => {
+        const tx = invokeScript({
+            dApp: shopAccountAddress,
+            call: {
+                "function": "purchase",
+                "args": [{
+                    "type" : "string",
+                    "value" : "item_B_coupon_price"
+                }]
+            },
+            payment: [
+                {
+                    amount:233,
                     assetId: null
                 }
             ],
