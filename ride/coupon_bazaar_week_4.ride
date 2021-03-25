@@ -1,0 +1,228 @@
+{-# STDLIB_VERSION 4 #-}
+{-# CONTENT_TYPE DAPP #-}
+{-# SCRIPT_TYPE ACCOUNT #-}
+
+let NONE = "NONE"
+
+# чтение данных из блокчейна. Если есть запрашиваемый ключ - вернет значение
+func getStringByKey(key: String) = {
+  match getString(this, key) {
+      case a: String => a
+      case _ => NONE
+    }
+}
+
+func getIntegerByKey(key: String) = {
+  match getInteger(this, key) {
+      case a: Int => a
+      case _ => NONE
+    }
+}
+
+# Для каждого товара нужен уникальный id. Это функция создания id для товара.
+# Она берет адрес пользователя и название товара, конкатенирует их, а потом высчитывает хэш,
+# который и будет  id для товара.
+func getKeyItem(supplier: String, title: String) = {
+  let supplierTitle = supplier + title
+  "item_" + supplierTitle.toBytes().sha256().toBase58String()
+}
+
+func getKeyItemSupplier(item: String) = item + "_owner"
+func getKeyItemPrice(item: String) = item + "_price"
+func getKeyItemData(item: String) = item + "_data"
+
+func getValueItemSupplier(account: String){
+  getStringByKey(getKeyItemSupplier(account))
+}
+
+# ========================== TASK 2 "Allow suppliers to add items"
+# ======================== ADD ITEM ========================
+
+@Callable(i)
+func addItem(title: String, price: Int, data: String) = {
+  let supplierAddress = toBase58String(i.caller.bytes)
+  let item = getKeyItem(supplierAddress, title)
+  if (price <= 0) then throw("Purcaches amoun cannot be less than price")
+  else if (getValueItemSupplier(item) != NONE) then throw("An item is already exists")
+  else {
+    WriteSet([
+      DataEntry(getKeyItemSupplier(item), supplierAddress),
+      DataEntry(getItemPrice(item), price),
+      DataEntry(getKeyItemData(item), data)
+    ])
+  }
+}
+
+# ========================== TASK 2 "Allow suppliers to register"
+# ======================== REGISTER SUPPLIER ========================
+
+@Callable(i)
+func registerSupplier(supplierName: String) = {
+  let supplierAddress = toBase58String(i.caller.bytes)
+  if (getStringByKey(supplierAddress) != NONE) then throw("Supplier already exists")
+  else{
+    WriteSet([
+      DataEntry(supplierAddress, supplierName)
+    ])
+  }
+}
+
+# ========================== TASK 2 "Allow customers to vote for items using commit-reveal voting"
+# ======================== VOTING ========================
+
+let VOTERS = 3
+let QUORUM = 2
+
+let FEATURED = "featured"
+let DELISTED = "delisted"
+
+let VOTING = "voting"
+let REVEAL = "reveal"
+
+func getKeyCommit(item: String, user: String) = item + "_" + user + "_commit"
+func getKeyCommitsCount(item: String) = item + "_cmtcnt"
+func getKeyReveal(item: String, user: String) = item + "_" + user + "_reveal"
+func getKeyItemStatus(item: String) = item + "_status"
+func getKeyItemCount(item: String, vote: String) = item + "_res:" + vote
+
+func getKeyUserItemCounter(user: String, item: String) = {
+  item + "_" + user + "_cnt"
+}
+
+func getKeyBalanceSupplier(account: String) = {
+  account + "_balance"
+}
+
+func getValueBalanceSupplier(account:String) = {
+  let supplierBalanceKey = getKeyBalanceSupplier(account)
+  match getInteger(this,supplierBalanceKey) {
+      case a:Int => a
+      case _ => 0
+    }
+}
+
+func getValueUserItemCounter(user:String, item: String) = {
+  let userItemCounterKey = getKeyUserItemCounter(user, item)
+  match getInteger(this, userItemCounterKey) {
+      case a:Int => a
+      case _ => 0
+    }
+}
+
+func getValueItemPrice(item: String){
+  let keyItemPrice = getKeyItemPrice(item)
+  getIntegerValue(this, keyItemPrice)   #  в отличии от getInteger() функция getIntegerValue() выбросит исключение если не найдет int. getInteger() не бросит а вернет
+  # если нет цены выполнение контракта завершится ошибкой
+}
+
+func getValueItemSupplier(account: String) = {
+  getStringByKey(getKeyItemSupplier(account))
+}
+
+func getValueCommit(item: String, user: String) = getStringByKey(getKeyCommit(item,user))
+func getValueCommitsCount(item: String) = getIntegerByKey(getKeyCommitsCount(item))
+func getValueReveal(item: String, user: String) = getStringByKey(getKeyReveal(item,user))
+func getValueItemStatus(item: String) = getStringByKey(getKeyItemStatus(item))
+func getValueVotesCount(item: String, vote: String) = getIntegerByKey(getKeyVotesCount(item,vote))
+
+@Callable(i)
+func voteCommit(item: String, hash: String) = {
+  let user = i.caller.bytes.toBase58String()
+  let commitsCount = getValueCommitsCount(item)
+  let status = getValueItemStatus(item)
+  if (commitsCount >= VOTERS) throw throw("Reached max number of voters")
+  else if (getValueCommit(item,user) != NONE) then throw("You are voted already")
+  # getKeyItemSupplier
+  else if (getKeyItemSupplier(item) == NONE) then throw("Item does not exist")
+  else if (status != NONE && status != VOTING) then throw("Voting is not active for this item now")
+  else{
+    let newStatus = if (commitsCount == VOTERS) then REVEAL else VOTING
+
+    WriteSet([
+      DataEntry(getKeyCommit(item, user), hash),
+      DataEntry(getKeyCommitsCount(item), commitsCount + 1),
+      DataEntry(getKeyItemStatus(item), newStatus)
+    ])
+  }
+}
+
+@Callable(i)
+func voteReveal(item: String, vote: String, salt: String) = {
+  let user = i.caller.bytes.toBase58String()
+  let status = getValueItemStatus(item)
+  let newVotesCount = getValueVotesCount(item, vote) + 1
+  let saltedVote = item + vote + salt
+  if (saltedVote.toBytes().sha256().toBase58String() != getValueCommit(item, user)) then
+    throw("Reveal data is not valid")
+  else if (getValueCommitsCount(item) < VOTERS) then throw("Max number of voters not reached")
+  else if (getValueReveal(item, user) != NONE) then throw("You are voted already")
+  else if (status != VOTING && status != REVEAL) then throw("Voting is not active for this item now")
+  else if (vote != FEATURED && vote != DELISTED) then throw("Provided voting option is incorrect")
+  else {
+    let newStatus = if (newVotesCount >= QUORUM) then vote else REVEAL
+    WriteSet([
+      DataEntry(getKeyReveal(item, user), vote),
+      DataEntry(getKeyVotesCount(item,item), newVotesCount),
+      DataEntry(getKeyItemStatus(item), newStatus)
+    ])
+  }
+}
+
+# ========================== TASK 2 "Allow customers to purchase items"
+# ======================== PURCHASE ========================
+
+@Callable(i)
+func purchase(item: String) = {
+  let pmt = i.payment.extract()
+  if (isDefined(pmt.assetId)) then throw("You can buy tokens only with Waves tokens")
+  else {
+    let userAddress = i.caller.bytes.toBase58String()
+    let price = getValueItemPrice(item)
+    let supplierAddress = getValueItemSupplier(item)
+
+    if (pmt.amount < price) then throw("Purchase amount cannot be less then item price")
+    else if (pmt.amount > price) then throw("Purchase amount cannot be higher than item price")
+    else if (supplierAddress == NONE) then then("Supplier does not exist")
+    else {
+      let userItemCounter = getKeyUserItemCounter(userAddress, item)
+      let newValueUserItemCounter = getValueUserItemCounter(userAddress, item) + 1
+
+      let supplierBalanceKey = getKeyBalanceSupplier(supplierAddress)
+      let newSupplierBalance = getValueBalanceSupplier(supplierAddress) + pmt.amount
+      let purchaseApprove = supplierBalanceKey + "_approve"
+      WriteSet([
+        DataEntry(userItemCounter, newValueUserItemCounter),
+        DataEntry(supplierBalanceKey, newSupplierBalance)
+        DataEntry(purchaseApprove, NONE)
+      ])
+    }
+  }
+}
+
+# ========================== TASK 2 "Allow suppliers to approve a purchase"
+# ======================== APPROVE PURCHASE ========================
+
+@Callable(i)
+func approvePuchase(item: String){
+   # проверить что адрес вызывающего функцию = адресу продавца
+  # иначе ошибка что вызывающий функцию не является продавцом и не может аппрувить покупку
+  let userAddress = i.caller.bytes.toBase58String()
+  let supplierAddress = getValueItemSupplier(item)
+
+  if (supplierAddress == NONE) then throw("Supplier not found")
+  else if(supplierAddress != userAddress) then throw("Only supplier can confirm transaction")
+  else {
+      let supplierBalanceKey = getKeyBalanceSupplier(supplierAddress)
+      let purchaseApprove = supplierBalanceKey + "_approve"
+      let newApproveStatus = getStringByKey(purchaseApprove)
+
+      if(newApproveStatus == NONE) then throw("Approve key for this item not found")
+      # проверить проставлен ли для товара статус что он заапрувлен. Если да - ошибка
+      else if(newApproveStatus == "APPROVED") then throw("Item already approved")
+      else{
+          WriteSet([
+            DataEntry(purchaseApprove, "APPROVED")
+        ])
+      }
+  }
+}
