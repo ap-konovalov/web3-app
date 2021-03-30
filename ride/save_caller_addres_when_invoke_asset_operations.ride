@@ -1,0 +1,19 @@
+{-# STDLIB_VERSION 3 #-}
+{-# CONTENT_TYPE DAPP #-}
+{-# SCRIPT_TYPE ACCOUNT #-}
+
+let expectedAssetId = base58'9gW9JdmZosgxWZ1HQeHPBdoWArAHsgegNvfGGT4PJVwY'
+
+@Callable(i)
+func writeCallerAddress() = {
+  let pmt = extract(i.payment)
+  let assetId = pmt.assetId
+  if (assetId != expectedAssetId) then throw("You can use only tokens with id = " +  expectedAssetId.toUtf8String())
+  else{
+    let callerAddress = toBase58String(i.caller.bytes)
+    WriteSet([
+        DataEntry("Address of caller", callerAddress)
+    ])
+  }
+}
+
