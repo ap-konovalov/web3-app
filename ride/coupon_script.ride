@@ -1,0 +1,28 @@
+{-# STDLIB_VERSION 4 #-}
+{-# CONTENT_TYPE EXPRESSION #-}
+{-# SCRIPT_TYPE ASSET #-}
+
+
+match (tx) {
+    # Allow Burn and Reissue transactions by issuer
+    case b:BurnTransaction => {
+        b.sender == addressFromStringValue("3N7r3gC85SsRTCK8GAVU6xk3fyQZipQWbjA") &&
+        tx.timestamp > lastBlock.timestamp + 60
+    }
+    case r:ReissueTransaction => {
+        r.sender == addressFromStringValue("3N7r3gC85SsRTCK8GAVU6xk3fyQZipQWbjA") &&
+        tx.timestamp > lastBlock.timestamp + 60
+    }
+
+    # Allow Exchange transactions only with Waves token
+    case ex:ExchangeTransaction => {
+        # прикрепив этот скрипт к нашему ассету мы проверим, что
+        # продавец выражает цену продажи ассета в waves
+        if (ex.buyOrder.assetPair.priceAsset != unit) then false
+        # покупатель выражает цену покупки ассета в waves
+        else if (ex.sellOrder.assetPair.priceAsset != unit) then false
+        else true
+    }
+
+    case _ => false
+}
